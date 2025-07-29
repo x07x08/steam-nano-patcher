@@ -6,6 +6,10 @@ It can also load other binaries to extend its functionality and is compatible wi
 
 # Installation
 
+Steam's CEF debugger must be enabled.
+
+You can do so by either adding a file named `.cef-enable-remote-debugging` inside Steam's folder or starting it with the `-cef-enable-debugging` argument.
+
 ## Executable
 
 1. Get a [binary](https://github.com/x07x08/steam-nano-patcher/releases) or compile one.
