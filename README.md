@@ -29,6 +29,7 @@ export SNP_CURRENT_PROC="$(basename "$0")"
 export SNP_SEARCH_PROC="steam"
 export LD_PRELOAD="${SNP_LOADER_PATH}${LD_PRELOAD:+:$LD_PRELOAD}"
 ```
+
 4. Run Steam.
 
 Since Steam is a 32-bit application, the injected code must also be the same architecture.
