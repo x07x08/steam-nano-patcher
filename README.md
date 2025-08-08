@@ -10,18 +10,25 @@ Steam's CEF debugger must be enabled.
 
 You can do so by either adding a file named `.cef-enable-remote-debugging` inside Steam's folder or starting it with the `-cef-enable-debugging` argument.
 
-## Executable
+After that, get a [binary](https://github.com/x07x08/steam-nano-patcher/releases) or compile one and choose how you want to install it.
 
-1. Get a [binary](https://github.com/x07x08/steam-nano-patcher/releases) or compile one.
-2. Place `src/js/injector/injector.js` in `steam_nano_patcher/injector/` relative to the executable.
-3. Place `src/js/ThemeInjector.js` in `<steamfolder>/steamui/steam_nano_patcher`.
-4. Run it alongside Steam.
+## Executable (`exe` folder)
 
-## Injector / Library
+1. Place `src/js/injector/injector.js` / `scripts/injector/injector.js` in `steam_nano_patcher/injector/`, relative to the executable.
+2. Place `src/js/ThemeInjector.js` / `scripts/ThemeInjector.js` in `<steamfolder>/steamui/steam_nano_patcher`.
+3. Run it alongside Steam.
 
-1. Compile a binary.
-2. Same as for an executable, but relative to Steam.
-3. The same.
+## Injector / Library (`lib` folder)
+
+> 1 and 2 are the same, but relative to Steam's folder.
+3. Add the following code to any of Steam's scripts (`/usr/lib/steam/` or `<steamfolder>/steam.sh`, the former is recommended):
+
+```sh
+export SNP_LOADER_PATH="<absolute path to the loader binary>"
+export SNP_CURRENT_PROC="$(basename "$0")"
+export SNP_SEARCH_PROC="steam"
+export LD_PRELOAD="${SNP_LOADER_PATH}${LD_PRELOAD:+:$LD_PRELOAD}"
+```
 4. Run Steam.
 
 Since Steam is a 32-bit application, the injected code must also be the same architecture.
@@ -60,11 +67,17 @@ On Windows and Linux the extension is appended automatically for every module.
 	"steamPort": 8080,
 	"debug": false,
 	"printRPCMessages": false,
-	"autoreconnect": false
+	"autoreconnect": false,
+	"exitOnLoopEnd": true,
+	"connectionDelay": null
 }
 ```
 
 The `debug` option enables `printRPCMessages` and opens a console on Windows if the loader is a library.
+
+`exitOnLoopEnd` is executable only.
+
+On Linux you might need to change `connectionDelay`. The value is in seconds and should be 3 or more. Windows is delayed already (for some reason).
 
 ## Injector configuration
 
