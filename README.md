@@ -21,7 +21,8 @@ After that, get a [binary](https://github.com/x07x08/steam-nano-patcher/releases
 ## Injector / Library (`lib` folder)
 
 > 1 and 2 are the same, but relative to Steam's folder.
-3. Add the following code to any of Steam's scripts (`/usr/lib/steam/` or `<steamfolder>/steam.sh`, the former is recommended):
+
+***Linux only***: Add the following code to any of Steam's scripts (`/usr/lib/steam/` or `<steamfolder>/steam.sh`, the former is recommended):
 
 ```sh
 export SNP_LOADER_PATH="<absolute path to the loader binary>"
@@ -30,6 +31,7 @@ export SNP_SEARCH_PROC="steam"
 export LD_PRELOAD="${SNP_LOADER_PATH}${LD_PRELOAD:+:$LD_PRELOAD}"
 ```
 
+3. Place the dynamic libraries inside Steam's folder.
 4. Run Steam.
 
 > [!NOTE]
