@@ -32,9 +32,13 @@ export LD_PRELOAD="${SNP_LOADER_PATH}${LD_PRELOAD:+:$LD_PRELOAD}"
 
 4. Run Steam.
 
-Since Steam is a 32-bit application, the injected code must also be the same architecture.
-
-This is not the case for macOS, as it's 64-bit only.
+> [!NOTE]
+> 
+> The patcher will not be injected if Steam wants to update (it executes another binary before the main one) or if it has already updated (the script was reset).
+> 
+> Since Steam is a 32-bit application, the injected code must also be the same architecture.
+> 
+> This is not the case for macOS, as it's 64-bit only.
 
 # Configuration
 
@@ -54,9 +58,10 @@ This is not the case for macOS, as it's 64-bit only.
 }
 ```
 
-**THE DEFAULT ENTRY MUST BE FIRST OR OTHERS CAN BE LOADED BEFORE IT**.
-
-On Windows and Linux the extension is appended automatically for every module.
+> [!IMPORTANT]
+> **THE DEFAULT ENTRY MUST BE FIRST OR OTHERS CAN BE LOADED BEFORE IT**.
+>
+> On Windows and Linux the extension is appended automatically for every module.
 
 ## Patcher
 
