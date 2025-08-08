@@ -24,18 +24,33 @@ pub fn build(b: *std.Build) void {
 
     var loaderSource: []const u8 = "src/loader_executable.zig";
     const patcherSource: []const u8 = "src/patcher_common.zig";
-    var loaderName: []const u8 = "snp_loader";
+    var loaderName: []const u8 = bshr.loaderName;
 
-    const isWindows = (target.result.os.tag == .windows);
+    const os = target.result.os.tag;
 
     if (isDLib) {
-        if (isWindows) {
-            loaderSource = "src/loader_dlib_win32.zig";
-            loaderName = "user32";
+        if (target.query.cpu_arch != .x86) {
+            std.log.info("Loader and patcher compilation targets should be x86.", .{});
+        }
 
-            if (target.query.cpu_arch != .x86) {
-                std.log.info("Loader and patcher compilation targets should be x86.", .{});
-            }
+        switch (os) {
+            .windows => {
+                loaderSource = "src/loader_dlib_win32.zig";
+                loaderName = "user32";
+            },
+
+            .linux => {
+                // Wasted time on this
+                // Windows' ABI is GNU by default
+
+                if (target.query.abi != .gnu) {
+                    std.log.info("Non GNU ABI will crash Steam", .{});
+                }
+
+                loaderSource = "src/loader_dlib_linux.zig";
+            },
+
+            else => {},
         }
     }
 
@@ -59,6 +74,12 @@ pub fn build(b: *std.Build) void {
         .root_module = loader,
     });
 
+    // Took me a while to find this fix
+    // Didn't notice this happening on Windows
+
+    loaderBin.use_llvm = true;
+    loaderBin.use_lld = true;
+
     const patcher = b.createModule(.{
         .root_source_file = b.path(patcherSource),
         .target = target,
@@ -75,10 +96,21 @@ pub fn build(b: *std.Build) void {
         .name = bshr.patcherName,
         .root_module = patcher,
     });
+    patcherBin.use_llvm = true;
+    patcherBin.use_lld = true;
 
-    if (isWindows) {
+    if (os == .windows) {
         patcherBin.linkSystemLibrary2("ws2_32", .{});
         patcherBin.linkSystemLibrary2("crypt32", .{});
+    }
+
+    if (os == .linux) {
+        if (target.query.cpu_arch == .x86) {
+            // https://github.com/ziglang/zig/issues/19342
+
+            loaderBin.link_z_notext = true;
+            patcherBin.link_z_notext = true;
+        }
     }
 
     b.getInstallStep().dependOn(&b.addInstallArtifact(loaderBin, .{

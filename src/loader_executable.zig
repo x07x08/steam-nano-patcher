@@ -5,7 +5,9 @@ const asy = @import("helpers/zig_async/async.zig");
 
 pub fn main() void {
     ldr.loadModules() catch |err| {
-        std.log.err("{}", .{err});
+        const sl = @src();
+
+        std.log.err("{s}->{s} : {}", .{ sl.file, sl.fn_name, err });
 
         return;
     };

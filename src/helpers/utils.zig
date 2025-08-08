@@ -37,7 +37,15 @@ pub fn openDynLib(allocator: std.mem.Allocator, libName: []const u8) !std.DynLib
                 libName, ".so",
             });
 
-            return std.DynLib.open(targetLib.?);
+            return std.DynLib.open(targetLib.?) catch {
+                allocator.free(targetLib.?);
+
+                targetLib = try std.mem.concat(allocator, u8, &.{
+                    "./", libName, ".so",
+                });
+
+                return std.DynLib.open(targetLib.?);
+            };
         },
 
         .windows => {

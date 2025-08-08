@@ -22,6 +22,8 @@ pub const PatcherSettings = struct {
     debug: bool = false,
     printRPCMessages: bool = false,
     autoreconnect: bool = false,
+    exitOnLoopEnd: bool = true,
+    connectionDelay: ?f64 = null,
 
     pub fn defaultString(self: *PatcherSettings, fieldName: []const u8) void {
         if (std.mem.eql(u8, fieldName, "injectorPath")) {
@@ -69,7 +71,9 @@ pub const ClientHandler = struct {
         }
 
         self.client.writeText(data.*) catch |err| {
-            std.log.err("{}", .{err});
+            const sl = @src();
+
+            std.log.err("{s}->{s} : {}", .{ sl.file, sl.fn_name, err });
         };
     }
 
@@ -229,19 +233,29 @@ pub const ClientHandler = struct {
 };
 
 export fn SNPEntryPoint() void {
-    start() catch |err| {
-        std.log.err("{}", .{err});
+    var exit = false;
 
-        return;
+    start(&exit) catch |err| {
+        const sl = @src();
+
+        std.log.err("{s}->{s} : {}", .{ sl.file, sl.fn_name, err });
     };
+
+    if (exit) std.process.exit(0);
 }
 
-fn start() !void {
+fn start(exit: *bool) !void {
     hlp.initAllocator();
 
     var settings = PatcherSettings{};
     jsse.defaultStrings(PatcherSettings, &settings);
     var jsonSettings = jsse.init(hlp.gpa);
+
+    defer {
+        if ((lshr.Mode == .Exe) and settings.exitOnLoopEnd) {
+            exit.* = true;
+        }
+    }
 
     defer _ = hlp.deinitAllocator();
 
@@ -321,6 +335,12 @@ fn start() !void {
 
             scriptFile.close();
         }
+    }
+
+    if (settings.connectionDelay) |delay| {
+        const time: u64 = std.math.lossyCast(u64, delay * @as(f64, std.time.ns_per_s));
+
+        std.Thread.sleep(time);
     }
 
     const wsURL = try getDevToolsEntry(hlp.gpa, settings.steamPort);

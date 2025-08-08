@@ -87,7 +87,7 @@ pub const Reader = struct {
     // fragment), the state of the fragmented message is maintained here.)
     fragment: ?Fragmented,
 
-    decompressor: ?DecompressorType,
+    decompressor: ?std.compress.flate.Decompress,
 
     // if we returned a decompressed message, it's stored here so that we can
     // cleanup when the user is done with the message
@@ -97,13 +97,11 @@ pub const Reader = struct {
     // message
     decompressor_reset: bool,
 
-    const DecompressorType = std.compress.flate.Decompressor(std.io.FixedBufferStream([]const u8).Reader);
-
     pub fn init(static: []u8, large_buffer_provider: *buffer.Provider, compression: ?Compression) Reader {
         var decompressor_reset = false;
-        var decompressor: ?DecompressorType = null;
+        var decompressor: ?std.compress.flate.Decompress = null;
         if (compression) |c| {
-            decompressor = .{};
+            decompressor = .init(undefined, .raw, undefined);
             decompressor_reset = c.client_no_context_takeover;
         }
 
@@ -380,7 +378,7 @@ pub const Reader = struct {
                 self.decompress_writer = null;
 
                 if (self.decompressor_reset) {
-                    self.decompressor = .{};
+                    self.decompressor = .init(undefined, .raw, undefined);
                 }
             }
         }
@@ -439,20 +437,18 @@ pub const Reader = struct {
 
         var decompressor = &self.decompressor.?;
         {
-            var reader = std.io.fixedBufferStream(compressed);
-            decompressor.setReader(reader.reader());
-            decompressor.decompress(&writer) catch |err| switch (err) {
-                error.EndOfStream => {},
-                else => return error.CompressionError,
+            const reader = std.io.Reader.fixed(compressed);
+            decompressor.reader = reader;
+            _ = decompressor.reader.streamRemaining(@ptrCast(&writer)) catch {
+                return error.CompressionError;
             };
         }
 
         {
-            var reader = std.io.fixedBufferStream(&[_]u8{ 0x00, 0x00, 0xff, 0xff });
-            decompressor.setReader(reader.reader());
-            decompressor.decompress(&writer) catch |err| switch (err) {
-                error.EndOfStream => {},
-                else => return error.CompressionError,
+            const reader = std.io.Reader.fixed(&[_]u8{ 0x00, 0x00, 0xff, 0xff });
+            decompressor.reader = reader;
+            _ = decompressor.reader.streamRemaining(@ptrCast(&writer)) catch {
+                return error.CompressionError;
             };
         }
 

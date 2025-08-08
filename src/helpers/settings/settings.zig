@@ -94,7 +94,11 @@ pub const JSON = struct {
         parsed: std.json.Parsed(T),
     ) !void {
         inline for (@typeInfo(T).@"struct".fields) |field| {
-            if (@typeInfo(field.type) != .optional) {
+            const fieldInfo = @typeInfo(field.type);
+
+            if ((fieldInfo != .optional) or
+                (fieldInfo.optional.child != []const u8))
+            {
                 continue;
             }
 
@@ -108,13 +112,8 @@ pub const JSON = struct {
                     else => {},
                 }
             } else {
-                switch (field.type) {
-                    ?[]const u8 => {
-                        if (@hasDecl(T, "defaultString")) {
-                            structure.defaultString(field.name);
-                        }
-                    },
-                    else => {},
+                if (@hasDecl(T, "defaultString")) {
+                    structure.defaultString(field.name);
                 }
             }
         }

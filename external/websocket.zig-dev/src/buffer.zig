@@ -39,6 +39,10 @@ pub const Writer = struct {
         self.pos = total_len;
     }
 
+    pub fn write(self: *Writer, data: []const u8) !void {
+        return self.writeAll(data);
+    }
+
     fn ensureTotalCapacity(self: *Writer, required_capacity: usize) !void {
         const buf = self.buf;
         if (required_capacity <= buf.len) {
