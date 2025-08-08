@@ -38,7 +38,7 @@ export LD_PRELOAD="${SNP_LOADER_PATH}${LD_PRELOAD:+:$LD_PRELOAD}"
 > 
 > Since Steam is a 32-bit application, the injected code must also be the same architecture.
 > 
-> This is not the case for macOS, as it's 64-bit only.
+> > This is not the case for macOS, as it's 64-bit only.
 
 # Configuration
 
