@@ -67,7 +67,7 @@ export LD_PRELOAD="${SNP_LOADER_PATH}${LD_PRELOAD:+:$LD_PRELOAD}"
 
 ## Patcher
 
-`steam_nano_pathcer/patcher_settings.json`
+`steam_nano_patcher/patcher_settings.json`
 
 ```json
 {
