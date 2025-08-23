@@ -11,7 +11,16 @@ const jsse = @import("helpers/settings/settings.zig").JSON;
 
 const lshr = @import("loader_shared");
 
-const websocket = @import("websocket");
+// mongoose has failed while its older fork works fine
+// Good job.
+
+const c = @cImport({
+    @cInclude("civetweb/civetweb.h");
+});
+
+pub const Errors = error{
+    ConnectionFailed,
+};
 
 pub const dtBindingName: []const u8 = "__snp_devtools_binding__";
 pub const settingsFile: []const u8 = bshr.patcherName ++ .{std.fs.path.sep} ++ "patcher_settings.json";
@@ -58,10 +67,111 @@ pub const CDPID = struct {
 };
 
 pub const ClientHandler = struct {
-    client: *websocket.Client,
+    connection: ?*c.mg_connection,
     mainLoop: *asy.Loop,
     settings: *PatcherSettings,
     execScript: ?[]u8,
+
+    pub fn reconnectToDevTools(self: *ClientHandler, allocator: std.mem.Allocator) !void {
+        const wsURL = try self.getDevToolsEntry(allocator);
+        errdefer allocator.free(wsURL);
+
+        self.connection = null;
+
+        try self.initDevTools(wsURL);
+        try self.connectToDevTools(allocator);
+
+        allocator.free(wsURL);
+    }
+
+    pub fn connectToDevTools(self: *ClientHandler, allocator: std.mem.Allocator) !void {
+        const params1 = .{
+            .discover = true,
+        };
+
+        self.writeHandler(@constCast(
+            &(std.json.Stringify.valueAlloc(
+                allocator,
+                .{
+                    .id = CDPID.AttachToTarget,
+                    .method = "Target.setDiscoverTargets",
+                    .params = params1,
+                },
+                .{},
+            ) catch unreachable),
+        ), &true);
+    }
+
+    pub fn initDevTools(self: *ClientHandler, wsURL: [:0]u8) !void {
+        const parsedURL = try std.Uri.parse(wsURL);
+
+        const urlHost, const urlPath = .{
+            hlp.returnURIComponentString(parsedURL.host.?),
+            hlp.returnURIComponentString(parsedURL.path),
+        };
+
+        const schemeSize = parsedURL.scheme.len + 3; // ://
+        const cHost = wsURL[schemeSize .. schemeSize + urlHost.len];
+        cHost.ptr[cHost.len] = 0;
+
+        self.connection = c.mg_connect_websocket_client(
+            cHost.ptr,
+            self.settings.steamPort,
+            0,
+            null,
+            0,
+            urlPath.ptr,
+            null,
+            &ClientHandler.handleMessage,
+            &ClientHandler.handleClose,
+            self,
+        ) orelse return Errors.ConnectionFailed;
+    }
+
+    pub fn getDevToolsEntry(self: *ClientHandler, allocator: std.mem.Allocator) ![:0]u8 {
+        if (self.settings.connectionDelay) |delay| {
+            const time: u64 = std.math.lossyCast(u64, delay * @as(f64, std.time.ns_per_s));
+
+            std.Thread.sleep(time);
+        }
+
+        var client = std.http.Client{ .allocator = allocator };
+
+        defer {
+            client.deinit();
+        }
+
+        var response = std.io.Writer.Allocating.init(allocator);
+
+        defer {
+            response.deinit();
+        }
+
+        const url = try std.fmt.allocPrint(allocator, "http://localhost:{d}/json/version", .{
+            self.settings.steamPort,
+        });
+        defer allocator.free(url);
+
+        _ = try client.fetch(.{
+            .response_writer = &response.writer,
+            .method = .GET,
+            .location = .{ .url = url },
+            .keep_alive = false,
+        });
+
+        var json: std.json.Parsed(std.json.Value) = try std.json.parseFromSlice(
+            std.json.Value,
+            allocator,
+            response.written(),
+            .{},
+        );
+
+        defer {
+            json.deinit();
+        }
+
+        return allocator.dupeZ(u8, json.value.object.get("webSocketDebuggerUrl").?.string);
+    }
 
     pub fn writeHandler(self: *ClientHandler, data: *[]u8, free: *const bool) void {
         defer {
@@ -70,11 +180,13 @@ pub const ClientHandler = struct {
             }
         }
 
-        self.client.writeText(data.*) catch |err| {
+        if (self.connection == null) return;
+
+        if (c.mg_websocket_client_write(self.connection.?, c.MG_WEBSOCKET_OPCODE_TEXT, data.*.ptr, data.len) == 0) {
             const sl = @src();
 
-            std.log.err("{s}->{s} : {}", .{ sl.file, sl.fn_name, err });
-        };
+            std.log.err("{s}->{s} : {s}", .{ sl.file, sl.fn_name, "failed" });
+        }
     }
 
     pub fn attachToPage(self: *ClientHandler, targetID: []const u8) void {
@@ -113,7 +225,7 @@ pub const ClientHandler = struct {
         ), &true);
     }
 
-    pub fn serverMessage(self: *ClientHandler, data: []u8, _: websocket.MessageTextType) !void {
+    pub fn textMsg(self: *ClientHandler, data: []u8) void {
         const msg: std.json.Parsed(std.json.Value) = std.json.parseFromSlice(
             std.json.Value,
             hlp.gpa,
@@ -211,21 +323,47 @@ pub const ClientHandler = struct {
         }
     }
 
+    pub fn handleMessage(
+        _: ?*c.struct_mg_connection,
+        flags: c_int,
+        data: [*c]u8,
+        dataLen: usize,
+        userData: ?*anyopaque,
+    ) callconv(.c) c_int {
+        const self: *ClientHandler = @ptrCast(@alignCast(userData.?));
+
+        const isText: bool = ((flags & 0xf) == c.MG_WEBSOCKET_OPCODE_TEXT);
+
+        if (isText) {
+            self.textMsg(data[0..dataLen]);
+        }
+
+        return 1;
+    }
+
+    pub fn handleClose(
+        _: ?*const c.struct_mg_connection,
+        userData: ?*anyopaque,
+    ) callconv(.c) void {
+        const self: *ClientHandler = @ptrCast(@alignCast(userData.?));
+
+        self.close();
+    }
+
     pub fn close(self: *ClientHandler) void {
         std.log.info("Disconnected", .{});
 
         if (self.settings.autoreconnect) {
             std.log.info("Trying to reconnect", .{});
 
-            if (reconnectToDevTools(hlp.gpa, self)) |_| {
+            if (self.reconnectToDevTools(hlp.gpa)) |_| {
                 return;
             } else |err| {
                 std.log.err("Failed to reconnect : {}", .{err});
+
+                self.connection = null;
             }
         }
-
-        self.client.close(.{}) catch unreachable;
-        self.client.deinit();
 
         self.mainLoop.deinit();
         self.mainLoop.exec();
@@ -337,130 +475,25 @@ fn start(exit: *bool) !void {
         }
     }
 
-    if (settings.connectionDelay) |delay| {
-        const time: u64 = std.math.lossyCast(u64, delay * @as(f64, std.time.ns_per_s));
-
-        std.Thread.sleep(time);
-    }
-
-    const wsURL = try getDevToolsEntry(hlp.gpa, settings.steamPort);
-    errdefer hlp.gpa.free(wsURL);
-
-    var wsClient = try initDevTools(hlp.gpa, wsURL, settings.steamPort);
-
     var mainLoop: asy.Loop = .{};
-    mainLoop.init(hlp.gpa);
+    mainLoop.init();
 
     var clh = ClientHandler{
-        .client = &wsClient,
+        .connection = null,
         .mainLoop = &mainLoop,
         .settings = &settings,
         .execScript = execScript,
     };
 
-    if (clh.client.readLoopInNewThread(&clh)) |thread| {
-        thread.detach();
-    } else |err| {
-        return err;
-    }
-
-    try connectToDevTools(hlp.gpa, &clh);
-
-    hlp.gpa.free(wsURL);
-
-    mainLoop.callSameThread();
-}
-
-pub fn reconnectToDevTools(allocator: std.mem.Allocator, clh: *ClientHandler) !void {
-    const wsURL = try getDevToolsEntry(hlp.gpa, clh.settings.steamPort);
+    const wsURL = try clh.getDevToolsEntry(hlp.gpa);
     errdefer hlp.gpa.free(wsURL);
 
-    try clh.client.close(.{});
-    clh.client.deinit();
+    _ = c.mg_init_library(0);
 
-    var wsClient = try initDevTools(allocator, wsURL, clh.settings.steamPort);
-    clh.client = &wsClient;
-
-    try connectToDevTools(allocator, clh);
+    try clh.initDevTools(wsURL);
+    try clh.connectToDevTools(hlp.gpa);
 
     hlp.gpa.free(wsURL);
 
-    try clh.client.readLoop(clh);
-}
-
-pub fn connectToDevTools(allocator: std.mem.Allocator, clh: *ClientHandler) !void {
-    const params1 = .{
-        .discover = true,
-    };
-
-    clh.writeHandler(@constCast(
-        &(std.json.Stringify.valueAlloc(
-            allocator,
-            .{
-                .id = CDPID.AttachToTarget,
-                .method = "Target.setDiscoverTargets",
-                .params = params1,
-            },
-            .{},
-        ) catch unreachable),
-    ), &true);
-}
-
-pub fn initDevTools(allocator: std.mem.Allocator, wsURL: []const u8, port: u16) !websocket.Client {
-    const parsedURL = try std.Uri.parse(wsURL);
-
-    const urlHost, const urlPath = .{
-        hlp.returnURIComponentString(parsedURL.host.?),
-        hlp.returnURIComponentString(parsedURL.path),
-    };
-
-    var wsClient = try websocket.Client.init(allocator, .{
-        .host = urlHost,
-        .port = port,
-    });
-
-    errdefer wsClient.deinit();
-
-    try wsClient.handshake(urlPath, .{});
-
-    return wsClient;
-}
-
-pub fn getDevToolsEntry(allocator: std.mem.Allocator, port: u16) ![]const u8 {
-    const client = try hlp.HeapInit(allocator, std.http.Client);
-
-    defer {
-        client.deinit();
-        allocator.destroy(client);
-    }
-
-    const response = try hlp.HeapInit(allocator, std.ArrayList(u8));
-
-    defer {
-        response.deinit();
-        allocator.destroy(response);
-    }
-
-    const url = try std.fmt.allocPrint(allocator, "http://localhost:{d}/json/version", .{port});
-    defer allocator.free(url);
-
-    _ = try client.fetch(.{
-        .response_storage = .{ .dynamic = response },
-        .method = .GET,
-        .location = .{ .url = url },
-        .keep_alive = false,
-    });
-
-    var json: std.json.Parsed(std.json.Value) = try std.json.parseFromSlice(
-        std.json.Value,
-        allocator,
-        response.items,
-        .{},
-    );
-
-    defer {
-        json.deinit();
-    }
-
-    return allocator.dupe(u8, json.value.object.get("webSocketDebuggerUrl").?.string);
+    mainLoop.callSameThread(hlp.gpa);
 }

@@ -62,22 +62,6 @@ pub fn openDynLib(allocator: std.mem.Allocator, libName: []const u8) !std.DynLib
     }
 }
 
-pub fn HeapInit(allocator: std.mem.Allocator, T: type) !*T {
-    var temp: T = if (@hasDecl(T, "init"))
-        T.init(allocator)
-    else if (@hasField(T, "allocator"))
-        .{ .allocator = allocator }
-    else
-        .{};
-
-    const ret = try allocator.create(T);
-    ret.* = temp;
-
-    if (@hasDecl(T, "deinit")) temp.deinit();
-
-    return ret;
-}
-
 pub fn HeapElem(allocator: std.mem.Allocator, elem: anytype) !*@TypeOf(elem) {
     const elemType = @TypeOf(elem);
 

@@ -102,7 +102,7 @@ pub fn Ticker(timeNs: u64, td: *const fn () void) type {
 
 // No function generator...
 
-fn loopFunc(data: *LoopData) void {
+fn loopFunc(data: *LoopData, allocator: std.mem.Allocator) void {
     while (true) {
         for (data.funcs.items) |funcData| {
             switch (funcData.args.len) {
@@ -206,7 +206,7 @@ fn loopFunc(data: *LoopData) void {
             }
         }
 
-        data.funcs.clearAndFree();
+        data.funcs.clearAndFree(allocator);
 
         if (((data.terminate != null) and
             (data.terminate.?.* == true)) or
@@ -241,28 +241,26 @@ pub const Loop = struct {
 
     pub fn init(
         self: *Self,
-        allocator: std.mem.Allocator,
     ) void {
-        self.data = .{ .funcs = std.ArrayList(LoopFuncData).init(allocator) };
+        self.data = .{ .funcs = std.ArrayList(LoopFuncData).empty };
     }
 
     pub fn deinit(
         self: *Self,
     ) void {
-        self.data.funcs.deinit();
         self.data.forceTerminate = true;
     }
 
-    pub fn call(self: *Self) !void {
-        try Spawn(loopFunc, .{&self.data});
+    pub fn call(self: *Self, allocator: std.mem.Allocator) !void {
+        try Spawn(loopFunc, .{ &self.data, allocator });
     }
 
-    pub fn callSameThread(self: *Self) void {
-        loopFunc(&self.data);
+    pub fn callSameThread(self: *Self, allocator: std.mem.Allocator) void {
+        loopFunc(&self.data, allocator);
     }
 
-    pub fn add(self: *Self, funcData: LoopFuncData) !void {
-        try self.data.funcs.append(funcData);
+    pub fn add(self: *Self, allocator: std.mem.Allocator, funcData: LoopFuncData) !void {
+        try self.data.funcs.append(funcData, allocator);
     }
 
     pub fn exec(self: *Self) void {

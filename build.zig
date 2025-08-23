@@ -1,14 +1,30 @@
 const std = @import("std");
 const bshr = @import("src/build_shared.zig");
 const z2z = @import("src/helpers/zig2zig/zig2zig.zig");
+const CLib = @import("src/helpers/extlib/extlib.zig").CLib;
 
 pub const LoaderInfo = struct {
     pub var Mode: std.builtin.OutputMode = .Exe;
 };
 
+pub fn makeCivet(options: *CLib, bin: *std.Build.Step.Compile) void {
+    bin.root_module.addCMacro("NO_SSL", "1");
+    bin.root_module.addCMacro("NO_CACHING", "1");
+    bin.root_module.addCMacro("NO_CGI", "1");
+    bin.root_module.addCMacro("USE_WEBSOCKET", "1");
+
+    switch (options.target.result.os.tag) {
+        .windows => {
+            bin.root_module.linkSystemLibrary("ws2_32", .{});
+        },
+
+        else => {},
+    }
+}
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
-    const loaderMode = b.option(std.builtin.OutputMode, "loaderMode", "Output mode for the loader.") orelse .Exe;
+    const loaderMode = b.option(std.builtin.OutputMode, "loadermode", "Output mode for the loader.") orelse .Exe;
     const isDLib = (loaderMode == .Lib);
 
     LoaderInfo.Mode = loaderMode;
@@ -54,6 +70,8 @@ pub fn build(b: *std.Build) void {
         }
     }
 
+    const cPath = "external/c/";
+
     const optimize = b.standardOptimizeOption(.{});
     const strippdb = b.option(bool, "strippdb", "Strip debug symbols file") orelse (optimize != .Debug);
 
@@ -87,7 +105,36 @@ pub fn build(b: *std.Build) void {
         .strip = strippdb,
         .link_libc = true,
     });
-    patcher.addImport("websocket", b.dependency("websocket", .{}).module("websocket"));
+
+    var civet = CLib{
+        .b = b,
+        .inc_path = &.{
+            cPath,
+        },
+        .name = "civetweb",
+        .target = target,
+        .optimize = optimize,
+        .strip = strippdb,
+        .c_files = &.{
+            cPath ++ "civetweb/civetweb.c",
+        },
+        .cflags = &.{
+            "-fno-sanitize=undefined",
+            // I agree with what the civet code says about this
+            "-Wno-date-time",
+            "-Wno-incompatible-pointer-types",
+        },
+        .makefunc = makeCivet,
+    };
+
+    // https://sourceforge.net/p/mingw-w64/bugs/992/
+
+    if (os == .windows) {
+        civet.dynamic = true;
+    }
+
+    const civet_bin = civet.makeLibrary();
+
     patcher.addAnonymousImport("loader_shared", .{
         .root_source_file = lshr,
     });
@@ -96,13 +143,10 @@ pub fn build(b: *std.Build) void {
         .name = bshr.patcherName,
         .root_module = patcher,
     });
+    patcherBin.root_module.addIncludePath(b.path(cPath));
+    patcherBin.root_module.linkLibrary(civet_bin);
     patcherBin.use_llvm = true;
     patcherBin.use_lld = true;
-
-    if (os == .windows) {
-        patcherBin.linkSystemLibrary2("ws2_32", .{});
-        patcherBin.linkSystemLibrary2("crypt32", .{});
-    }
 
     if (os == .linux) {
         if (target.query.cpu_arch == .x86) {
