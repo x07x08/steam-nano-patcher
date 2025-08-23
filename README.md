@@ -35,6 +35,8 @@ export LD_PRELOAD="${SNP_LOADER_PATH}${LD_PRELOAD:+:$LD_PRELOAD}"
 4. Run Steam.
 
 > [!NOTE]
+>
+> You might need to restart Steam after it fully finishes loading.
 > 
 > The patcher will not be injected if Steam wants to update (it executes another binary before the main one) or if it has already updated (the script was reset).
 > 
