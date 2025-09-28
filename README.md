@@ -14,13 +14,16 @@ After that, get a [binary](https://github.com/x07x08/steam-nano-patcher/releases
 
 ## Executable (`exe` folder)
 
-1. Place `src/js/injector/injector.js` / `scripts/injector/injector.js` in `steam_nano_patcher/injector/`, relative to the executable.
-2. Place `src/js/ThemeInjector.js` / `scripts/ThemeInjector.js` in `<steamfolder>/steamui/steam_nano_patcher`.
-3. Run it alongside Steam.
+1. Place `src/js/injector/injector.js` / `scripts/js/injector/injector.js` in `steam_nano_patcher/js/injector`, relative to the executable.
+2. Place `src/js/ThemeInjector.js` / `scripts/js/ThemeInjector.js` in `<steamfolder>/steamui/steam_nano_patcher`.
+3. Place `src/lua`, the contents of each subfolder from `external/lua` and `external/c/civetweb/civetweb.h` in `steam_nano_patcher/lua`, relative to the executable.
+   
+   `scripts/lua` can be copied directly instead of manually making the folder.
+5. Run it alongside Steam.
 
 ## Injector / Library (`lib` folder)
 
-> 1 and 2 are the same, but relative to Steam's folder.
+> Steps 1, 2 and 3 are the same, but relative to Steam's folder.
 
 ***Linux only***: Add the following code to any of Steam's scripts (`/usr/lib/steam/` or `<steamfolder>/steam.sh`, the former is recommended):
 
@@ -30,6 +33,15 @@ export SNP_CURRENT_PROC="$(basename "$0")"
 export SNP_SEARCH_PROC="steam"
 export LD_PRELOAD="${SNP_LOADER_PATH}${LD_PRELOAD:+:$LD_PRELOAD}"
 ```
+
+> [!NOTE]
+>
+> Steam checks the size of `steam.sh` and will replace the script if it's incorrect. Try removing comments from it.
+>
+> Custom scripts can also be used.
+> 
+> See https://github.com/SteamClientHomebrew/Millennium/pull/503 and https://github.com/SteamClientHomebrew/Millennium/issues/475
+> 
 
 3. Place the dynamic libraries inside Steam's folder.
 4. Run Steam.
@@ -43,6 +55,7 @@ export LD_PRELOAD="${SNP_LOADER_PATH}${LD_PRELOAD:+:$LD_PRELOAD}"
 > Since Steam is a 32-bit application, the injected code must also be the same architecture.
 > 
 > > This is not the case for macOS, as it's 64-bit only.
+> 
 
 # Configuration
 
@@ -65,6 +78,8 @@ export LD_PRELOAD="${SNP_LOADER_PATH}${LD_PRELOAD:+:$LD_PRELOAD}"
 > [!IMPORTANT]
 > **THE DEFAULT ENTRY MUST BE FIRST OR OTHERS CAN BE LOADED BEFORE IT**.
 >
+> No hash checking is done.
+>
 > On Windows and Linux the extension is appended automatically for every module.
 
 ## Patcher
@@ -73,7 +88,8 @@ export LD_PRELOAD="${SNP_LOADER_PATH}${LD_PRELOAD:+:$LD_PRELOAD}"
 
 ```json
 {
-	"injectorPath": "steam_nano_patcher/injector/injector.js",
+	"injectorPath": "steam_nano_patcher/js/injector/injector.js",
+	"luaScript": "steam_nano_patcher/lua/script.lua",
 	"steamPort": 8080,
 	"debug": false,
 	"printRPCMessages": false,
