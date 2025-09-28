@@ -43,8 +43,8 @@ export LD_PRELOAD="${SNP_LOADER_PATH}${LD_PRELOAD:+:$LD_PRELOAD}"
 > See https://github.com/SteamClientHomebrew/Millennium/pull/503 and https://github.com/SteamClientHomebrew/Millennium/issues/475
 > 
 
-3. Place the dynamic libraries inside Steam's folder.
-4. Run Steam.
+4. Place the dynamic libraries inside Steam's folder.
+5. Run Steam.
 
 > [!NOTE]
 >
