@@ -19,7 +19,7 @@ After that, get a [binary](https://github.com/x07x08/steam-nano-patcher/releases
 3. Place `src/lua`, the contents of each subfolder from `external/lua` and `external/c/civetweb/civetweb.h` in `steam_nano_patcher/lua`, relative to the executable.
    
    `scripts/lua` can be copied directly instead of manually making the folder.
-5. Run it alongside Steam.
+4. Run it alongside Steam.
 
 ## Injector / Library (`lib` folder)
 
