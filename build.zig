@@ -1,10 +1,11 @@
 const std = @import("std");
 const bshr = @import("src/build_shared.zig");
-const z2z = @import("src/helpers/zig2zig/zig2zig.zig");
+const z2z = @import("src/helpers/s2s/zig2zig.zig");
 const CLib = @import("src/helpers/extlib/extlib.zig").CLib;
 
 pub const LoaderInfo = struct {
     pub var Mode: std.builtin.OutputMode = .Exe;
+    pub var CivetDynamic = false;
 };
 
 pub fn makeCivet(options: *CLib, bin: *std.Build.Step.Compile) void {
@@ -28,15 +29,6 @@ pub fn build(b: *std.Build) void {
     const isDLib = (loaderMode == .Lib);
 
     LoaderInfo.Mode = loaderMode;
-
-    const loaderInfo = z2z.serializeType(LoaderInfo, b.allocator,
-        \\const std = @import("std");
-        \\
-        \\
-    ) catch unreachable;
-
-    const genFile = b.addWriteFiles();
-    const lshr = genFile.add("loader_shared.zig", loaderInfo);
 
     var loaderSource: []const u8 = "src/loader_executable.zig";
     const patcherSource: []const u8 = "src/patcher_common.zig";
@@ -135,6 +127,17 @@ pub fn build(b: *std.Build) void {
 
     const civet_bin = civet.makeLibrary();
 
+    LoaderInfo.CivetDynamic = civet.dynamic;
+
+    const loaderInfo = z2z.serializeType(LoaderInfo, b.allocator,
+        \\const std = @import("std");
+        \\
+        \\
+    ) catch unreachable;
+
+    const genFile = b.addWriteFiles();
+    const lshr = genFile.add("loader_shared.zig", loaderInfo);
+
     patcher.addAnonymousImport("loader_shared", .{
         .root_source_file = lshr,
     });
@@ -156,6 +159,16 @@ pub fn build(b: *std.Build) void {
             patcherBin.link_z_notext = true;
         }
     }
+
+    const luaJIT = b.dependency("luajit_build", .{
+        .target = target,
+        .optimize = optimize,
+        .link_as = .static,
+    });
+
+    const luaJITBin = luaJIT.module("luajit-build");
+
+    patcherBin.root_module.addImport("clj", luaJITBin);
 
     b.getInstallStep().dependOn(&b.addInstallArtifact(loaderBin, .{
         .implib_dir = .disabled,

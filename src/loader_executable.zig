@@ -15,7 +15,7 @@ pub fn main() void {
     };
 
     var mainLoop: asy.Loop = .{};
-    mainLoop.data.funcs = std.ArrayList(asy.LoopFuncData).empty;
+    mainLoop.init();
 
     mainLoop.callSameThread(hlp.gpa);
 }

@@ -1,0 +1,17 @@
+.{
+    .name = .luajit_build,
+    .fingerprint = 0x7f498d6fbf9f9a2f,
+    .version = "1.1.6",
+    .dependencies = .{
+        .upstream = .{
+            .path = "../../c/luajit",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "build/",
+        "include/",
+    },
+}

@@ -18,14 +18,14 @@ pub const JSON = struct {
         };
     }
 
-    pub fn truncateFile(self: Self) !void {
+    pub fn truncateFile(self: *Self) !void {
         if (self.file == null) return Errors.NullFile;
 
         try self.file.?.seekTo(0);
         try self.file.?.setEndPos(0);
     }
 
-    pub fn serialize(self: Self, structure: anytype) !void {
+    pub fn serialize(self: *Self, structure: anytype) !void {
         if (self.file == null) return Errors.NullFile;
 
         const string = try std.json.Stringify.valueAlloc(
@@ -38,7 +38,7 @@ pub const JSON = struct {
         _ = try self.file.?.write(string);
     }
 
-    pub fn deserialize(self: Self, T: type, buf: *[]u8) !std.json.Parsed(T) {
+    pub fn deserialize(self: *Self, T: type, buf: *[]u8) !std.json.Parsed(T) {
         if (self.file == null) return Errors.NullFile;
 
         _ = try self.file.?.read(buf.*);
@@ -48,7 +48,7 @@ pub const JSON = struct {
         });
     }
 
-    pub fn fetchOrSerialize(self: Self, T: type, structure: anytype) !void {
+    pub fn fetchOrSerialize(self: *Self, T: type, structure: anytype) !void {
         const stat = try self.file.?.stat();
         var buf = try self.allocator.alloc(u8, @intCast(stat.size));
         defer self.allocator.free(buf);

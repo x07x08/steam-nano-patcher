@@ -102,108 +102,120 @@ pub fn Ticker(timeNs: u64, td: *const fn () void) type {
 
 // No function generator...
 
+pub fn callFunc(funcData: FuncData) void {
+    switch (funcData.args.len) {
+        0 => {
+            @call(.auto, @as(*const fn () void, @ptrCast(funcData.ptr)), .{});
+        },
+
+        1 => {
+            @call(
+                .auto,
+                @as(*const fn (
+                    a1: *anyopaque,
+                ) void, @ptrCast(funcData.ptr)),
+                .{funcData.args[0]},
+            );
+        },
+
+        2 => {
+            @call(.auto, @as(*const fn (
+                a1: *anyopaque,
+                a2: *anyopaque,
+            ) void, @ptrCast(funcData.ptr)), .{
+                funcData.args[0],
+                funcData.args[1],
+            });
+        },
+
+        3 => {
+            @call(.auto, @as(*const fn (
+                a1: *anyopaque,
+                a2: *anyopaque,
+                a3: *anyopaque,
+            ) void, @ptrCast(funcData.ptr)), .{
+                funcData.args[0],
+                funcData.args[1],
+                funcData.args[2],
+            });
+        },
+
+        4 => {
+            @call(.auto, @as(*const fn (
+                a1: *anyopaque,
+                a2: *anyopaque,
+                a3: *anyopaque,
+                a4: *anyopaque,
+            ) void, @ptrCast(funcData.ptr)), .{
+                funcData.args[0],
+                funcData.args[1],
+                funcData.args[2],
+                funcData.args[3],
+            });
+        },
+
+        5 => {
+            @call(.auto, @as(*const fn (
+                a1: *anyopaque,
+                a2: *anyopaque,
+                a3: *anyopaque,
+                a4: *anyopaque,
+                a5: *anyopaque,
+            ) void, @ptrCast(funcData.ptr)), .{
+                funcData.args[0],
+                funcData.args[1],
+                funcData.args[2],
+                funcData.args[3],
+                funcData.args[4],
+            });
+        },
+
+        6 => {
+            @call(.auto, @as(*const fn (
+                a1: *anyopaque,
+                a2: *anyopaque,
+                a3: *anyopaque,
+                a4: *anyopaque,
+                a5: *anyopaque,
+                a6: *anyopaque,
+            ) void, @ptrCast(funcData.ptr)), .{
+                funcData.args[0],
+                funcData.args[1],
+                funcData.args[2],
+                funcData.args[3],
+                funcData.args[4],
+                funcData.args[5],
+            });
+        },
+
+        7 => {
+            @call(.auto, @as(*const fn (
+                a1: *anyopaque,
+                a2: *anyopaque,
+                a3: *anyopaque,
+                a4: *anyopaque,
+                a5: *anyopaque,
+                a6: *anyopaque,
+                a7: *anyopaque,
+            ) void, @ptrCast(funcData.ptr)), .{
+                funcData.args[0],
+                funcData.args[1],
+                funcData.args[2],
+                funcData.args[3],
+                funcData.args[4],
+                funcData.args[5],
+                funcData.args[6],
+            });
+        },
+
+        else => {},
+    }
+}
+
 fn loopFunc(data: *LoopData, allocator: std.mem.Allocator) void {
     while (true) {
         for (data.funcs.items) |funcData| {
-            switch (funcData.args.len) {
-                0 => {
-                    @call(.auto, @as(*const fn () void, @ptrCast(funcData.ptr)), .{});
-                },
-                1 => {
-                    @call(
-                        .auto,
-                        @as(*const fn (
-                            a1: *anyopaque,
-                        ) void, @ptrCast(funcData.ptr)),
-                        .{funcData.args[0]},
-                    );
-                },
-                2 => {
-                    @call(.auto, @as(*const fn (
-                        a1: *anyopaque,
-                        a2: *anyopaque,
-                    ) void, @ptrCast(funcData.ptr)), .{
-                        funcData.args[0],
-                        funcData.args[1],
-                    });
-                },
-                3 => {
-                    @call(.auto, @as(*const fn (
-                        a1: *anyopaque,
-                        a2: *anyopaque,
-                        a3: *anyopaque,
-                    ) void, @ptrCast(funcData.ptr)), .{
-                        funcData.args[0],
-                        funcData.args[1],
-                        funcData.args[2],
-                    });
-                },
-                4 => {
-                    @call(.auto, @as(*const fn (
-                        a1: *anyopaque,
-                        a2: *anyopaque,
-                        a3: *anyopaque,
-                        a4: *anyopaque,
-                    ) void, @ptrCast(funcData.ptr)), .{
-                        funcData.args[0],
-                        funcData.args[1],
-                        funcData.args[2],
-                        funcData.args[3],
-                    });
-                },
-                5 => {
-                    @call(.auto, @as(*const fn (
-                        a1: *anyopaque,
-                        a2: *anyopaque,
-                        a3: *anyopaque,
-                        a4: *anyopaque,
-                        a5: *anyopaque,
-                    ) void, @ptrCast(funcData.ptr)), .{
-                        funcData.args[0],
-                        funcData.args[1],
-                        funcData.args[2],
-                        funcData.args[3],
-                        funcData.args[4],
-                    });
-                },
-                6 => {
-                    @call(.auto, @as(*const fn (
-                        a1: *anyopaque,
-                        a2: *anyopaque,
-                        a3: *anyopaque,
-                        a4: *anyopaque,
-                        a5: *anyopaque,
-                        a6: *anyopaque,
-                    ) void, @ptrCast(funcData.ptr)), .{
-                        funcData.args[0],
-                        funcData.args[1],
-                        funcData.args[2],
-                        funcData.args[3],
-                        funcData.args[4],
-                        funcData.args[5],
-                    });
-                },
-                7 => {
-                    @call(.auto, @as(*const fn (
-                        a1: *anyopaque,
-                        a2: *anyopaque,
-                        a3: *anyopaque,
-                        a4: *anyopaque,
-                        a5: *anyopaque,
-                        a6: *anyopaque,
-                        a7: *anyopaque,
-                    ) void, @ptrCast(funcData.ptr)), .{
-                        funcData.args[0],
-                        funcData.args[1],
-                        funcData.args[2],
-                        funcData.args[3],
-                        funcData.args[4],
-                        funcData.args[5],
-                        funcData.args[6],
-                    });
-                },
-                else => {},
-            }
+            callFunc(funcData);
         }
 
         data.funcs.clearAndFree(allocator);
@@ -223,13 +235,13 @@ fn loopFunc(data: *LoopData, allocator: std.mem.Allocator) void {
 }
 
 pub const LoopData = struct {
-    funcs: std.ArrayList(LoopFuncData) = undefined,
+    funcs: std.ArrayList(FuncData) = undefined,
     forceTerminate: bool = false,
     wait: std.Thread.ResetEvent = .{},
     terminate: ?*bool = null,
 };
 
-pub const LoopFuncData = struct {
+pub const FuncData = struct {
     ptr: *const anyopaque,
     args: []const *anyopaque,
 };
@@ -242,7 +254,7 @@ pub const Loop = struct {
     pub fn init(
         self: *Self,
     ) void {
-        self.data = .{ .funcs = std.ArrayList(LoopFuncData).empty };
+        self.data = .{ .funcs = std.ArrayList(FuncData).empty };
     }
 
     pub fn deinit(
@@ -259,8 +271,8 @@ pub const Loop = struct {
         loopFunc(&self.data, allocator);
     }
 
-    pub fn add(self: *Self, allocator: std.mem.Allocator, funcData: LoopFuncData) !void {
-        try self.data.funcs.append(funcData, allocator);
+    pub fn add(self: *Self, allocator: std.mem.Allocator, funcData: FuncData) !void {
+        try self.data.funcs.append(allocator, funcData);
     }
 
     pub fn exec(self: *Self) void {
