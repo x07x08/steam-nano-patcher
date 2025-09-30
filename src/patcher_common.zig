@@ -12,9 +12,9 @@ const z2l = @import("helpers/s2s/zig2lua.zig");
 
 const lshr = @import("loader_shared");
 
-//// mongoose has failed while its older fork works fine
-//// Good job.
-//
+// mongoose has failed while its older fork works fine
+// Good job.
+
 const c = @cImport({
     @cInclude("civetweb/civetweb.h");
 });

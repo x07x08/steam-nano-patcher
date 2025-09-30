@@ -66,21 +66,19 @@ void sleep_ms(uint64_t ms);
 #include "steam_nano_patcher/lua/civetweb.h"
 ]]
 
+print("Lua loaded")
+
 local function fn(func)
-	func()
+	return func()
 end
 
-local cmg = ffi.C
-
-if (isCivetDynamic) then
-	cmg = ffi.load("civetweb")
-end
-
-local pathSep = stdfspath["sep_str"]
-local cwd = currentDirectory
-local settings = patcherSettings
-
-local dtBindingName = "__snp_devtools_binding__"
+local cmg = fn(function()
+	if (isCivetDynamic) then
+		return ffi.load("civetweb")
+	else
+		return ffi.C
+	end
+end)
 
 local CDPID = {
 	AttachToTarget = 7800,
@@ -92,294 +90,302 @@ local CDPID = {
 }
 
 local charPtr = ffi.typeof("char[?]")
-
-print("Lua loaded")
-
-local loop = ffi.C.allocLoop()
 local buf = charPtr(1)
+
+local pathSep = stdfspath["sep_str"]
+local cwd = currentDirectory
+local settings = patcherSettings
+
+local dtBindingName = "__snp_devtools_binding__"
 
 local handleMessage
 local handleClose
-local currentConnection
 
----@type string
-local execScript
+local clientHandler = {
+	---@type string
+	execScript = nil,
+	loop = nil,
+	currentConnection = nil,
 
-fn(function()
-	local scriptFile = io.open(cwd .. pathSep .. settings["injectorPath"], "r")
+	writeHandler = function(self, data)
+		cmg.mg_websocket_client_write(
+			self.currentConnection,
+			ffi.C.MG_WEBSOCKET_OPCODE_TEXT,
+			data,
+			#data
+		)
+	end,
 
-	if (scriptFile == nil) then
-		return
-	end
-
-	execScript = scriptFile:read("a")
-	scriptFile:close()
-end)
-
-local function writeHandler(data)
-	cmg.mg_websocket_client_write(
-		currentConnection,
-		ffi.C.MG_WEBSOCKET_OPCODE_TEXT,
-		data,
-		#data
-	)
-end
-
-local function attachToPage(targetID)
-	writeHandler(json:encode(
-		{
-			id = CDPID.AttachToTarget,
-			method = "Target.attachToTarget",
-			params = {
-				targetId = targetID,
-				flatten = true,
-			},
-		}
-	))
-
-	writeHandler(json:encode(
-		{
-			id = CDPID.ExposeDP,
-			method = "Target.exposeDevToolsProtocol",
-			params = {
-				targetId = targetID,
-				bindingName = dtBindingName,
+	attachToPage = function(self, targetID)
+		self:writeHandler(json:encode(
+			{
+				id = CDPID.AttachToTarget,
+				method = "Target.attachToTarget",
+				params = {
+					targetId = targetID,
+					flatten = true,
+				},
 			}
-		}
-	))
-end
+		))
 
-local function textMsg(data)
-	if (settings["debug"] and settings["printRPCMessages"]) then
-		print(data)
-	end
+		self:writeHandler(json:encode(
+			{
+				id = CDPID.ExposeDP,
+				method = "Target.exposeDevToolsProtocol",
+				params = {
+					targetId = targetID,
+					bindingName = dtBindingName,
+				}
+			}
+		))
+	end,
 
-	local msg = json:decode(data)
-
-	if (msg["id"]) then
-		if (msg["error"]) then
-			return
+	textMsg = function(self, data)
+		if (settings["debug"] and settings["printRPCMessages"]) then
+			print(data)
 		end
-	else
-		local method = msg["method"]
 
-		if (method == "Target.attachedToTarget") then
-			local params = msg["params"]
-			local jsContextSessionID = params["sessionId"]
+		local msg = json:decode(data)
 
-			writeHandler(json:encode(
-				{
-					id = CDPID.LogEnable,
-					method = "Log.enable",
-					sessionId = jsContextSessionID,
-				}
-			))
-
-			writeHandler(json:encode(
-				{
-					id = CDPID.PageEnable,
-					method = "Page.enable",
-					sessionId = jsContextSessionID,
-				}
-			))
-
-			if (execScript ~= nil) then
-				writeHandler(json:encode(
-					{
-						id = CDPID.BypassCSP,
-						method = "Page.setBypassCSP",
-						params = {
-							enabled = true,
-						},
-						sessionId = jsContextSessionID,
-					}
-				))
-
-				-- Without "runImmediately" it does not run
-				--
-				-- The "Runtime" domain does not bypass CORS and it cannot
-				-- run inside fetched documents
-
-				writeHandler(json:encode(
-					{
-						id = CDPID.AddScript,
-						method = "Page.addScriptToEvaluateOnNewDocument",
-						params = {
-							source = execScript,
-							runImmediately = true,
-						},
-						sessionId = jsContextSessionID,
-					}
-				))
+		if (msg["id"]) then
+			if (msg["error"]) then
+				return
 			end
-		elseif (method == "Target.targetCreated") then
-			local targetInfo = msg["params"]["targetInfo"]
+		else
+			local method = msg["method"]
 
-			attachToPage(targetInfo["targetId"])
+			if (method == "Target.attachedToTarget") then
+				local params = msg["params"]
+				local jsContextSessionID = params["sessionId"]
+
+				self:writeHandler(json:encode(
+					{
+						id = CDPID.LogEnable,
+						method = "Log.enable",
+						sessionId = jsContextSessionID,
+					}
+				))
+
+				self:writeHandler(json:encode(
+					{
+						id = CDPID.PageEnable,
+						method = "Page.enable",
+						sessionId = jsContextSessionID,
+					}
+				))
+
+				if (self.execScript ~= nil) then
+					self:writeHandler(json:encode(
+						{
+							id = CDPID.BypassCSP,
+							method = "Page.setBypassCSP",
+							params = {
+								enabled = true,
+							},
+							sessionId = jsContextSessionID,
+						}
+					))
+
+					-- Without "runImmediately" it does not run
+					--
+					-- The "Runtime" domain does not bypass CORS and it cannot
+					-- run inside fetched documents
+
+					self:writeHandler(json:encode(
+						{
+							id = CDPID.AddScript,
+							method = "Page.addScriptToEvaluateOnNewDocument",
+							params = {
+								source = self.execScript,
+								runImmediately = true,
+							},
+							sessionId = jsContextSessionID,
+						}
+					))
+				end
+			elseif (method == "Target.targetCreated") then
+				local targetInfo = msg["params"]["targetInfo"]
+
+				self:attachToPage(targetInfo["targetId"])
+			end
 		end
-	end
-end
+	end,
 
-local function connectToDevTools()
-	writeHandler(json:encode(
-		{
-			id = CDPID.AttachToTarget,
-			method = "Target.setDiscoverTargets",
-			params = {
-				discover = true
-			},
-		}
-	))
-end
+	connectToDevTools = function(self)
+		self:writeHandler(json:encode(
+			{
+				id = CDPID.AttachToTarget,
+				method = "Target.setDiscoverTargets",
+				params = {
+					discover = true
+				},
+			}
+		))
+	end,
 
-local function initDevTools(wsURL)
-	local parsed = url.parse(wsURL)
+	initDevTools = function(self, wsURL)
+		local parsed = url.parse(wsURL)
 
-	currentConnection = cmg.mg_connect_websocket_client(
-		parsed.host,
-		settings["steamPort"],
-		0,
-		nil,
-		0,
-		parsed.path,
-		nil,
-		handleMessage,
-		handleClose,
-		nil
-	)
+		self.currentConnection = cmg.mg_connect_websocket_client(
+			parsed.host,
+			settings["steamPort"],
+			0,
+			nil,
+			0,
+			parsed.path,
+			nil,
+			handleMessage,
+			handleClose,
+			nil
+		)
 
-	return (currentConnection ~= nil)
-end
+		return (self.currentConnection ~= nil)
+	end,
 
-local function getDevToolsEntry()
-	local port = settings["steamPort"]
+	getDevToolsEntry = function(self)
+		local port = settings["steamPort"]
 
-	-- If you don't provide the Host header, the webSocketDebuggerUrl field will have 3 slashes
+		-- If you don't provide the Host header, the webSocketDebuggerUrl field will have 3 slashes
 
-	local connection = cmg.mg_download(
-		"localhost",
-		port,
-		0,
-		buf,
-		1,
-		"GET /json/version HTTP/1.1\r\nHost: localhost:%d\r\nConnection: close\r\n\r\n",
-		port
-	)
+		local connection = cmg.mg_download(
+			"localhost",
+			port,
+			0,
+			buf,
+			1,
+			"GET /json/version HTTP/1.1\r\nHost: localhost:%d\r\nConnection: close\r\n\r\n",
+			port
+		)
 
-	if (connection == nil) then
-		return nil
-	end
-
-	local ret = charPtr(1024)
-	local readSize = 0
-	local read = 0
-
-	while (true) do
-		read = cmg.mg_read(connection, ret, 1024)
-
-		if (read <= 0) then
-			break
+		if (connection == nil) then
+			return nil
 		end
 
-		readSize = readSize + read
-	end
+		local ret = charPtr(1024)
+		local readSize = 0
+		local read = 0
 
-	local parsed = json:decode(ffi.string(ret, readSize))
+		while (true) do
+			read = cmg.mg_read(connection, ret, 1024)
 
-	if (parsed == nil) then
-		cmg.mg_close_connection(connection)
+			if (read <= 0) then
+				break
+			end
 
-		return nil
-	end
+			readSize = readSize + read
+		end
 
-	return parsed["webSocketDebuggerUrl"]
-end
+		local parsed = json:decode(ffi.string(ret, readSize))
 
-local function reconnectToDevTools()
-	local delay = settings["connectionDelay"]
+		if (parsed == nil) then
+			cmg.mg_close_connection(connection)
 
-	if (delay == nil) then
-		delay = 0.0
-	end
+			return nil
+		end
 
-	print(string.format("Connecting to Steam with a delay of %d seconds", delay))
+		return parsed["webSocketDebuggerUrl"]
+	end,
 
-	ffi.C.sleep_ms(delay * ffi.C.ms_per_s)
+	reconnectToDevTools = function(self)
+		local delay = settings["connectionDelay"]
 
-	local ret = false
+		if (delay == nil) then
+			delay = 0.0
+		end
 
-	local wsURL = getDevToolsEntry()
+		print(string.format("Connecting to Steam with a delay of %d seconds", delay))
 
-	if (wsURL == nil) then
+		ffi.C.sleep_ms(delay * ffi.C.ms_per_s)
+
+		local ret = false
+
+		local wsURL = self:getDevToolsEntry()
+
+		if (wsURL == nil) then
+			return ret
+		end
+
+		ret = self:initDevTools(wsURL)
+
+		if (ret == false) then
+			return ret
+		end
+
+		print("Connected to Steam")
+
+		self:connectToDevTools()
+
 		return ret
-	end
+	end,
 
-	ret = initDevTools(wsURL)
+	close = function(self)
+		print("Disconnected")
 
-	if (ret == false) then
-		return ret
-	end
+		if (settings["autoreconnect"]) then
+			print("Trying to reconnect")
 
-	print("Connected to Steam")
+			if (self:reconnectToDevTools()) then
+				return
+			else
+				print("Failed to reconnect")
 
-	connectToDevTools()
+				self.currentConnection = nil
+			end
+		end
 
-	return ret
-end
+		ffi.C.deinitLoop(self.loop)
+		ffi.C.execLoop(self.loop)
+	end,
+}
 
 handleMessage = ffi.cast("mg_websocket_data_handler",
 	function(connection, flags, data, dataLen, userData)
 		local isText = ((ffi.C.bitAND(flags, 0xF) == ffi.C.MG_WEBSOCKET_OPCODE_TEXT))
 
 		if (isText) then
-			textMsg(ffi.string(data, dataLen))
+			clientHandler:textMsg(ffi.string(data, dataLen))
 		end
 
 		return 1
 	end
 )
 
-local function close()
-	print("Disconnected")
-
-	if (settings["autoreconnect"]) then
-		print("Trying to reconnect")
-
-		if (reconnectToDevTools()) then
-			return
-		else
-			print("Failed to reconnect")
-
-			currentConnection = nil
-		end
-	end
-
-	ffi.C.deinitLoop(loop)
-	ffi.C.execLoop(loop)
-end
-
 handleClose = ffi.cast("mg_websocket_close_handler",
 	function(connection, userData)
-		close()
+		clientHandler:close()
 	end
 )
 
 local function main()
 	cmg.mg_init_library(0)
 
-	if (not reconnectToDevTools()) then
-		ffi.C.freeLoop(loop)
+	clientHandler.loop = ffi.C.allocLoop()
+	clientHandler.execScript = fn(function()
+		local scriptFile = io.open(cwd .. pathSep .. settings["injectorPath"], "r")
+
+		if (scriptFile == nil) then
+			return nil
+		end
+
+		local ret = scriptFile:read("a")
+		scriptFile:close()
+
+		return ret
+	end)
+
+	if (not clientHandler:reconnectToDevTools()) then
+		ffi.C.freeLoop(clientHandler.loop)
 
 		error("Steam connection is denied or invalid")
 	end
 
-	ffi.C.initLoop(loop)
-	ffi.C.callLoopSameThread(loop)
+	ffi.C.initLoop(clientHandler.loop)
+	ffi.C.callLoopSameThread(clientHandler.loop)
 
 	handleMessage:free()
 	handleClose:free()
 
-	ffi.C.freeLoop(loop)
+	ffi.C.freeLoop(clientHandler.loop)
 end
 
 main()
