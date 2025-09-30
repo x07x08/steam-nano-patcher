@@ -12,6 +12,8 @@ You can do so by either adding a file named `.cef-enable-remote-debugging` insid
 
 After that, get a [binary](https://github.com/x07x08/steam-nano-patcher/releases) or compile one and choose how you want to install it.
 
+Scripts will be updated independently of tagged releases.
+
 ## Executable (`exe` folder)
 
 1. Place `src/js/injector/injector.js` / `scripts/js/injector/injector.js` in `steam_nano_patcher/js/injector`, relative to the executable.
